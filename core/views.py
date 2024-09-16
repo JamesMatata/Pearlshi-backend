@@ -31,21 +31,36 @@ def create_booking(request):
 def create_review(request):
     """
     This view handles the submission of a review.
-    It first checks if the provided booking ID is valid, then allows the user to submit a review.
+    It first checks if the booking is achieved and then allows the user to submit a review if it doesn't already exist.
     """
     serializer = ReviewSerializer(data=request.data)
 
     if serializer.is_valid():
         booking_id = serializer.validated_data['booking_id']
+
+        # Check if the booking exists and is marked as achieved
+        try:
+            booking = Booking.objects.get(booking_id=booking_id)
+            if not booking.is_achieved:
+                return Response(
+                    {"error": "The booking is not marked as achieved."},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Booking.DoesNotExist:
+            return Response(
+                {"error": "Booking not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
         # Check if a review already exists for this booking
-        if Review.objects.filter(booking__booking_id=booking_id).exists():
+        if Review.objects.filter(booking=booking).exists():
             return Response(
                 {"error": "A review already exists for this booking."},
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # If no review exists, proceed to create one
-        serializer.save()  # The custom `create` method in the serializer will handle linking the booking
+        # If no review exists and the booking is achieved, proceed to create one
+        serializer.save()  # No need to pass booking; the serializer's create method handles it
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
